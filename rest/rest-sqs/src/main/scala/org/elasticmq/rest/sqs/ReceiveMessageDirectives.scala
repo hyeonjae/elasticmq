@@ -8,6 +8,8 @@ import org.elasticmq.msg.ReceiveMessages
 import org.elasticmq.rest.sqs.directives.ElasticMQDirectives
 import org.joda.time.Duration
 
+import scala.util.matching.Regex
+
 trait ReceiveMessageDirectives {
   this: ElasticMQDirectives with AttributesModule with SQSLimitsModule =>
   object MessageReadeableAttributeNames {
@@ -19,7 +21,7 @@ trait ReceiveMessageDirectives {
     val MaxNumberOfMessagesAttribute = "MaxNumberOfMessages"
     val WaitTimeSecondsAttribute = "WaitTimeSeconds"
     val ReceiveRequestAttemptIdAttribute = "ReceiveRequestAttemptId"
-    val MessageAttributeNamePattern = "MessageAttributeName\\.\\d".r
+    val MessageAttributeNamePattern: Regex = "MessageAttributeName\\.\\d".r
     val MessageDeduplicationIdAttribute = "MessageDeduplicationId"
     val MessageGroupIdAttribute = "MessageGroupId"
 
