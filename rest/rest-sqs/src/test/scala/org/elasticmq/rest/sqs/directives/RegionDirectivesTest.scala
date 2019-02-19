@@ -18,11 +18,23 @@ class RegionDirectivesTest
       }
     }
 
-    Post("/test") ~> RawHeader("credential", "AKIAIKGQ552ZXMGBQGAA/20190218/eu-east-1/sqs/aws4_request") ~> route ~> check {
+    Post("/test") ~> RawHeader(
+      "authorization",
+      "AWS4-HMAC-SHA256 Credential=AKIAIKGQ552ZXMGBQGAA/20190219/eu-east-1/sqs/aws4_request") ~> route ~> check {
       responseAs[String] shouldEqual "eu-east-1"
     }
 
-    Post("/test") ~> RawHeader("credential", "AKIAIKGQ552ZXMGBQGAA/20190218") ~> route ~> check {
+    Post("/test") ~> RawHeader(
+      "authorization",
+      "AWS4-HMAC-SHA256 Credential=AKIAIKGQ552ZXMGBQGAA/20190219/lol/sqs/aws4_request") ~> route ~> check {
+      responseAs[String] shouldEqual ""
+    }
+
+    Post("/test") ~> RawHeader("authorization", "Basic") ~> route ~> check {
+      responseAs[String] shouldEqual ""
+    }
+
+    Post("/test") ~> RawHeader("authorization", "AWS4-HMAC-SHA256 Credential=AKIAIKGQ552ZXMGBQGAA/20190219") ~> route ~> check {
       responseAs[String] shouldEqual ""
     }
 
