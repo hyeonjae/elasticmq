@@ -29,7 +29,7 @@ class RegionDirectivesTest
     Post("/test") ~> route ~> check {
       responseAs[String] shouldEqual ""
     }
-    
+
   }
 
 }

@@ -5,7 +5,7 @@ import org.elasticmq.msg.{CreateQueue, GetQueueData, LookupQueue}
 import org.elasticmq.rest.sqs.Constants._
 import org.elasticmq.rest.sqs.CreateQueueDirectives._
 import org.elasticmq.rest.sqs.ParametersUtil._
-import org.elasticmq.rest.sqs.directives.ElasticMQDirectives
+import org.elasticmq.rest.sqs.directives.{ElasticMQDirectives, RegionDirectives}
 import org.elasticmq.rest.sqs.model.RedrivePolicy
 import org.elasticmq.{DeadLettersQueueData, MillisVisibilityTimeout, QueueData}
 import org.joda.time.{DateTime, Duration}
@@ -16,96 +16,104 @@ import scala.async.Async._
 import scala.concurrent.Future
 
 trait CreateQueueDirectives {
-  this: ElasticMQDirectives with QueueURLModule with AttributesModule with SQSLimitsModule =>
+  this: ElasticMQDirectives with QueueURLModule with AttributesModule with SQSLimitsModule with RegionDirectives =>
 
-  def createQueue(p: AnyParams) = {
+  def createQueue(p: AnyParams, defaultRegion: String) = {
     p.action("CreateQueue") {
       rootPath {
-        queueNameFromParams(p) { queueName =>
-          val attributes = attributeNameAndValuesReader.read(p)
+        region { r =>
+          queueNameFromParams(p) { queueName =>
+            val attributes = attributeNameAndValuesReader.read(p)
 
-          val redrivePolicy =
-            try {
-              import org.elasticmq.rest.sqs.model.RedrivePolicyJson._
-              attributes
-                .get(RedrivePolicyParameter)
-                .map(_.parseJson.convertTo[RedrivePolicy])
-            } catch {
-              case e: DeserializationException =>
-                logger.warn("Cannot deserialize the redrive policy attribute", e)
-                throw new SQSException("MalformedQueryString")
-              case e: ParsingException =>
-                logger.warn("Cannot parse the redrive policy attribute", e)
-                throw new SQSException("MalformedQueryString")
-            }
+            val redrivePolicy =
+              try {
+                import org.elasticmq.rest.sqs.model.RedrivePolicyJson._
+                attributes
+                  .get(RedrivePolicyParameter)
+                  .map(_.parseJson.convertTo[RedrivePolicy])
+              } catch {
+                case e: DeserializationException =>
+                  logger.warn("Cannot deserialize the redrive policy attribute", e)
+                  throw new SQSException("MalformedQueryString")
+                case e: ParsingException =>
+                  logger.warn("Cannot parse the redrive policy attribute", e)
+                  throw new SQSException("MalformedQueryString")
+              }
 
-          async {
-            redrivePolicy match {
-              case Some(rd) =>
-                if (await(queueManagerActor ? LookupQueue(rd.queueName)).isEmpty) {
-                  throw SQSException.nonExistentQueue
-                }
+            async {
+              redrivePolicy match {
+                case Some(rd) =>
+                  if (await(queueManagerActor ? LookupQueue(rd.queueName)).isEmpty) {
+                    throw SQSException.nonExistentQueue
+                  }
 
-                if (rd.maxReceiveCount < 1 || rd.maxReceiveCount > 1000) {
-                  throw SQSException.invalidParameterValue
-                }
-              case None =>
-            }
+                  if (rd.maxReceiveCount < 1 || rd.maxReceiveCount > 1000) {
+                    throw SQSException.invalidParameterValue
+                  }
+                case None =>
+              }
 
-            val secondsVisibilityTimeoutOpt =
-              attributes.parseOptionalLong(VisibilityTimeoutParameter)
-            val secondsVisibilityTimeout =
-              secondsVisibilityTimeoutOpt.getOrElse(DefaultVisibilityTimeout)
+              val secondsVisibilityTimeoutOpt =
+                attributes.parseOptionalLong(VisibilityTimeoutParameter)
+              val secondsVisibilityTimeout =
+                secondsVisibilityTimeoutOpt.getOrElse(DefaultVisibilityTimeout)
 
-            val secondsDelayOpt =
-              attributes.parseOptionalLong(DelaySecondsAttribute)
-            val secondsDelay = secondsDelayOpt.getOrElse(DefaultDelay)
+              val secondsDelayOpt =
+                attributes.parseOptionalLong(DelaySecondsAttribute)
+              val secondsDelay = secondsDelayOpt.getOrElse(DefaultDelay)
 
-            val secondsReceiveMessageWaitTimeOpt = attributes.parseOptionalLong(ReceiveMessageWaitTimeSecondsAttribute)
-            val secondsReceiveMessageWaitTime = secondsReceiveMessageWaitTimeOpt
-              .getOrElse(DefaultReceiveMessageWait)
+              val secondsReceiveMessageWaitTimeOpt =
+                attributes.parseOptionalLong(ReceiveMessageWaitTimeSecondsAttribute)
+              val secondsReceiveMessageWaitTime = secondsReceiveMessageWaitTimeOpt
+                .getOrElse(DefaultReceiveMessageWait)
 
-            val now = new DateTime()
-            val isFifo = attributes.get("FifoQueue").contains("true")
-            val hasContentBasedDeduplication = attributes.get("ContentBasedDeduplication").contains("true")
-            val newQueueData = QueueData(
-              queueName,
-              MillisVisibilityTimeout.fromSeconds(secondsVisibilityTimeout),
-              Duration.standardSeconds(secondsDelay),
-              Duration.standardSeconds(secondsReceiveMessageWaitTime),
-              now,
-              now,
-              redrivePolicy.map(rd => DeadLettersQueueData(rd.queueName, rd.maxReceiveCount)),
-              isFifo,
-              hasContentBasedDeduplication
-            )
+              val now = new DateTime()
+              val isFifo = attributes.get("FifoQueue").contains("true")
+              val hasContentBasedDeduplication = attributes.get("ContentBasedDeduplication").contains("true")
+              val region = r.filter(_.nonEmpty).getOrElse(defaultRegion)
 
-            if (!queueName.matches("[\\p{Alnum}\\._-]*")) {
-              throw SQSException.invalidParameterValue
-            } else if (sqsLimits == SQSLimits.Strict && queueName
-                         .length() > 80) {
-              throw SQSException.invalidParameterValue
-            } else if (isFifo && !queueName.endsWith(".fifo")) {
-              throw SQSException.invalidParameterValue
-            }
+              val newQueueData = QueueData(
+                queueName,
+                MillisVisibilityTimeout.fromSeconds(secondsVisibilityTimeout),
+                Duration.standardSeconds(secondsDelay),
+                Duration.standardSeconds(secondsReceiveMessageWaitTime),
+                now,
+                now,
+                redrivePolicy.map(rd => DeadLettersQueueData(rd.queueName, rd.maxReceiveCount)),
+                isFifo,
+                hasContentBasedDeduplication,
+                None,
+                None,
+                Map(),
+                Map("region" -> region)
+              )
 
-            verifyMessageWaitTime(secondsReceiveMessageWaitTimeOpt)
+              if (!queueName.matches("[\\p{Alnum}\\._-]*")) {
+                throw SQSException.invalidParameterValue
+              } else if (sqsLimits == SQSLimits.Strict && queueName
+                           .length() > 80) {
+                throw SQSException.invalidParameterValue
+              } else if (isFifo && !queueName.endsWith(".fifo")) {
+                throw SQSException.invalidParameterValue
+              }
 
-            val queueData = await(lookupOrCreateQueue(newQueueData))
+              verifyMessageWaitTime(secondsReceiveMessageWaitTimeOpt)
 
-            // if the request set the attributes compare them against the queue
-            if ((secondsDelayOpt.isDefined && queueData.delay.getStandardSeconds != secondsDelay) ||
-                (secondsReceiveMessageWaitTimeOpt.isDefined
-                && queueData.receiveMessageWait.getStandardSeconds != secondsReceiveMessageWaitTime) ||
-                (secondsVisibilityTimeoutOpt.isDefined
-                && queueData.defaultVisibilityTimeout.seconds != secondsVisibilityTimeout)) {
-              // Special case: the queue existed, but has different attributes
-              throw new SQSException("AWS.SimpleQueueService.QueueNameExists")
-            }
+              val queueData = await(lookupOrCreateQueue(newQueueData))
 
-            queueURL(queueData) { url =>
-              respondWith {
-                <CreateQueueResponse>
+              // if the request set the attributes compare them against the queue
+              if ((secondsDelayOpt.isDefined && queueData.delay.getStandardSeconds != secondsDelay) ||
+                  (secondsReceiveMessageWaitTimeOpt.isDefined
+                  && queueData.receiveMessageWait.getStandardSeconds != secondsReceiveMessageWaitTime) ||
+                  (secondsVisibilityTimeoutOpt.isDefined
+                  && queueData.defaultVisibilityTimeout.seconds != secondsVisibilityTimeout)) {
+                // Special case: the queue existed, but has different attributes
+                throw new SQSException("AWS.SimpleQueueService.QueueNameExists")
+              }
+
+              queueURL(queueData) { url =>
+                respondWith {
+                  <CreateQueueResponse>
                   <CreateQueueResult>
                     <QueueUrl>{url}</QueueUrl>
                   </CreateQueueResult>
@@ -113,6 +121,7 @@ trait CreateQueueDirectives {
                     <RequestId>{EmptyRequestId}</RequestId>
                   </ResponseMetadata>
                 </CreateQueueResponse>
+                }
               }
             }
           }

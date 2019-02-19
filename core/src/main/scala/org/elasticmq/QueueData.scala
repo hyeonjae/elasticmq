@@ -1,6 +1,6 @@
 package org.elasticmq
 
-import org.joda.time.{Duration, DateTime}
+import org.joda.time.{DateTime, Duration}
 
 case class QueueData(name: String,
                      defaultVisibilityTimeout: MillisVisibilityTimeout,
@@ -13,6 +13,7 @@ case class QueueData(name: String,
                      hasContentBasedDeduplication: Boolean = false,
                      copyMessagesTo: Option[String] = None,
                      moveMessagesTo: Option[String] = None,
-                     tags: Map[String, String] = Map[String, String]())
+                     tags: Map[String, String] = Map[String, String](),
+                     attributes: Map[String, String] = Map[String, String]())
 
 case class DeadLettersQueueData(name: String, maxReceiveCount: Int)

@@ -37,6 +37,7 @@ class ElasticMQServerConfig(config: Config) extends Logging {
   }
 
   val generateNodeAddress = config.getBoolean("generate-node-address")
+  val region = config.getString("region")
 
   // Optionally expose the REST SQS interface
 

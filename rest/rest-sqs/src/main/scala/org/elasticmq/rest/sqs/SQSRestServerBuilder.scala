@@ -15,7 +15,7 @@ import com.typesafe.config.ConfigFactory
 import org.elasticmq._
 import org.elasticmq.actor.QueueManagerActor
 import org.elasticmq.rest.sqs.Constants._
-import org.elasticmq.rest.sqs.directives.ElasticMQDirectives
+import org.elasticmq.rest.sqs.directives.{ElasticMQDirectives, RegionDirectives}
 import org.elasticmq.util.{Logging, NowProvider}
 
 import scala.collection.immutable.TreeMap
@@ -34,7 +34,8 @@ import scala.xml.{EntityRef, _}
   * <ul>for `sqsLimits`: relaxed
   * </li>
   */
-object SQSRestServerBuilder extends TheSQSRestServerBuilder(None, None, "", 9324, NodeAddress(), true, SQSLimits.Strict)
+object SQSRestServerBuilder
+    extends TheSQSRestServerBuilder(None, None, "", 9324, NodeAddress(), true, SQSLimits.Strict, "us-west-2")
 
 case class TheSQSRestServerBuilder(providedActorSystem: Option[ActorSystem],
                                    providedQueueManagerActor: Option[ActorRef],
@@ -42,7 +43,8 @@ case class TheSQSRestServerBuilder(providedActorSystem: Option[ActorSystem],
                                    port: Int,
                                    serverAddress: NodeAddress,
                                    generateServerAddress: Boolean,
-                                   sqsLimits: SQSLimits.Value)
+                                   sqsLimits: SQSLimits.Value,
+                                   defaultRegion: String)
     extends Logging {
 
   /**
@@ -105,11 +107,12 @@ case class TheSQSRestServerBuilder(providedActorSystem: Option[ActorSystem],
       new AtomicReference[NodeAddress](theServerAddress)
 
     val env = new QueueManagerActorModule with QueueURLModule with SQSLimitsModule with BatchRequestsModule
-    with ElasticMQDirectives with CreateQueueDirectives with DeleteQueueDirectives with QueueAttributesDirectives
-    with ListQueuesDirectives with SendMessageDirectives with SendMessageBatchDirectives with ReceiveMessageDirectives
-    with DeleteMessageDirectives with DeleteMessageBatchDirectives with ChangeMessageVisibilityDirectives
-    with ChangeMessageVisibilityBatchDirectives with GetQueueUrlDirectives with PurgeQueueDirectives
-    with AddPermissionDirectives with AttributesModule with TagQueueDirectives with TagsModule {
+    with ElasticMQDirectives with RegionDirectives with CreateQueueDirectives with DeleteQueueDirectives
+    with QueueAttributesDirectives with ListQueuesDirectives with SendMessageDirectives with SendMessageBatchDirectives
+    with ReceiveMessageDirectives with DeleteMessageDirectives with DeleteMessageBatchDirectives
+    with ChangeMessageVisibilityDirectives with ChangeMessageVisibilityBatchDirectives with GetQueueUrlDirectives
+    with PurgeQueueDirectives with AddPermissionDirectives with AttributesModule with TagQueueDirectives
+    with TagsModule {
 
       def serverAddress = currentServerAddress.get()
 
@@ -130,7 +133,7 @@ case class TheSQSRestServerBuilder(providedActorSystem: Option[ActorSystem],
         deleteMessageBatch(p) ~
         // 2. Getting, creating queues
         getQueueUrl(p) ~
-        createQueue(p) ~
+        createQueue(p, defaultRegion) ~
         listQueues(p) ~
         purgeQueue(p) ~
         // 3. Other

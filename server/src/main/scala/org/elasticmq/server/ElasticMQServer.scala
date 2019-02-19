@@ -46,7 +46,8 @@ class ElasticMQServer(config: ElasticMQServerConfig) extends Logging {
         config.restSqs.bindPort,
         config.nodeAddress,
         config.generateNodeAddress,
-        config.restSqs.sqsLimits
+        config.restSqs.sqsLimits,
+        config.region
       ).start()
 
       server.waitUntilStarted()
