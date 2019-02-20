@@ -27,7 +27,7 @@ trait RegionDirectives {
     "eu-west-2",
     "eu-west-3",
     "eu-north-1",
-    "eu-east-1",
+    "eu-east-1"
   )
 
   def region: Directive1[Option[String]] = {
