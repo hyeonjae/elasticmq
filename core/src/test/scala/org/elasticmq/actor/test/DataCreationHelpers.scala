@@ -12,7 +12,8 @@ trait DataCreationHelpers {
       deadLettersQueue: Option[DeadLettersQueueData] = None,
       copyMessagesToQueue: Option[String] = None,
       moveMessagesToQueue: Option[String] = None,
-      tags: Map[String, String] = Map[String, String]()
+      tags: Map[String, String] = Map[String, String](),
+      attributes: Map[String, String] = Map[String, String]()
   ) =
     QueueData(
       name = name,
@@ -24,7 +25,8 @@ trait DataCreationHelpers {
       deadLettersQueue = deadLettersQueue,
       copyMessagesTo = copyMessagesToQueue,
       moveMessagesTo = moveMessagesToQueue,
-      tags = tags
+      tags = tags,
+      attributes = attributes
     )
 
   def createMessageData(id: String,
